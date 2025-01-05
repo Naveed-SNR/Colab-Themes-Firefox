@@ -3,7 +3,7 @@
   <br>
   <h1>Colab Themes</h1>
   <br>
-  <p>A Chrome extension to stylize Google Colab.
+  <p>A Firefox add-on to stylize Google Colab. Props to  <a href="https://github.com/DannyCol/Colab-Themes/">Danny Col</a> for the original chrome extension which can be founded <a href="https://github.com/DannyCol/Colab-Themes/">here.<a/>
   <br><br>
   Changes the page CSS, text editor, and generates Python code to change Matplotlib styles to match the theme the user choses. Users may import themes or use any of the 56 provided. Colab Themes enhances the data science experience by transforming the way users view their code and their data!</p>
   <br>
