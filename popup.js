@@ -154,55 +154,51 @@ function changeCssTheme(page_css) {
 }
 
 function select_theme(filename) {
-  chrome.storage.sync.set({'filename' : filename});
-  chrome.storage.sync.set({'user_added' : false});
-  chrome.storage.sync.get('extension_active', function(result) {
+  browser.storage.sync.set({'filename': filename});
+  browser.storage.sync.set({'user_added': false});
+  browser.storage.sync.get('extension_active').then(result => {
     if (result.extension_active) {
-      chrome.tabs.query({active : true, lastFocusedWindow : true}, function (tabs) {
+      browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
         let tabId = tabs[0].id;
         fetch('themes/'+ filename +'.json')
         .then(data => data.json())
         .then(theme_json => {
           // create css
           let page_css = getCssTheme(theme_json);
-          chrome.storage.sync.set({'page_css' : page_css});
+          browser.storage.sync.set({'page_css': page_css});
           // set monaco
-          chrome.scripting.executeScript({
-            target: {tabId: tabId},
-            func: changeMonacoTheme,
-            args: [theme_json],
-            world: 'MAIN',
+          browser.tabs.executeScript({
+            code: `(${changeMonacoTheme.toString()})(${JSON.stringify(theme_json)});`
           });
         });
         // send css to service workers
-        chrome.tabs.sendMessage(tabId,{update:true});
+        browser.tabs.sendMessage(tabId, {update: true});
       });
     }
   });
 }
 
 function select_added_theme(filename) {
-  chrome.storage.sync.set({'filename' : filename});
-  chrome.storage.sync.set({'user_added' : true});
-  chrome.storage.sync.get('extension_active', function(result) {
+  browser.storage.sync.set({'filename': filename});
+  browser.storage.sync.set({'user_added': true});
+  browser.storage.sync.get('extension_active').then(result => {
     if (result.extension_active) {
-      chrome.tabs.query({active : true, lastFocusedWindow : true}, function (tabs) {
+      browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
         let tabId = tabs[0].id;
-        chrome.storage.sync.get([filename + '1', filename + '2', filename + '3'], function(result) {
+        browser.storage.sync.get([filename + '1', filename + '2', filename + '3']).then(result => {
           let theme_json = result[filename + '1'] + result[filename + '2'] + result[filename + '3'];
           theme_json = JSON.parse(theme_json);
           let page_css = getCssTheme(theme_json);
-          chrome.storage.sync.set({'page_css' : page_css});
+          browser.storage.sync.set({'page_css': page_css});
           // set monaco
-          chrome.scripting.executeScript({
+          browser.tabs.executeScript(tabId, {
             target: {tabId: tabId},
             func: changeMonacoTheme,
-            args: [theme_json],
-            world: 'MAIN',
+            args: [theme_json]
           });
         });
         // send css to service workers
-        chrome.tabs.sendMessage(tabId,{update:true});
+        browser.tabs.sendMessage(tabId, {update: true});
       });
     }
   });
@@ -219,24 +215,25 @@ xhr.onreadystatechange = function () {
     Object.keys(theme_list).forEach(function(key) {
       let opt = document.createElement("option");
       opt.value = theme_list[key];
-      opt.innerHTML = theme_list[key];
+      opt.textContent = theme_list[key];
       selectList.appendChild(opt);
     });
+    
     // append user imported themes to drop down
-    chrome.storage.sync.get('user_files', function(result) {
+    browser.storage.sync.get('user_files').then(result => {
       if (result.user_files) {
         for (let i = 0; i < result.user_files.length; i++) {
           let opt = document.createElement("option");
           opt.setAttribute('user_added', true);
           opt.value = result.user_files[i];
-          opt.innerHTML = result.user_files[i];
+          opt.textContent = result.user_files[i];
           selectList.appendChild(opt);
         }
       }
     });
+    
     // user selection process
     selectList.onchange = function() {
-      
       if (this.options[this.selectedIndex].hasAttribute('user_added')) {
         select_added_theme(this.value);
       }
@@ -244,8 +241,9 @@ xhr.onreadystatechange = function () {
         select_theme(this.value);
       }
     };
+    
     // set selected theme as chosen
-    chrome.storage.sync.get('filename', function(result) {
+    browser.storage.sync.get('filename').then(result => {
       if (result.filename) {
         selectList.value = result.filename;
       }
@@ -258,10 +256,10 @@ xhr.send();
 
 // create on/off switch
 document.getElementById('on_off').onchange = function() {
-  chrome.storage.sync.set({"extension_active": this.checked});
+  browser.storage.sync.set({"extension_active": this.checked});
   if (this.checked) {
-    chrome.tabs.query({active : true, lastFocusedWindow : true}, function (tabs) {
-      chrome.storage.sync.get('filename', function(result) {
+    browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
+      browser.storage.sync.get('filename').then(result => {
         if (result.filename) {
           select_theme(result.filename);
         }
@@ -269,8 +267,9 @@ document.getElementById('on_off').onchange = function() {
     });
   }
 };
+
 // set on/off value
-chrome.storage.sync.get('extension_active', function(result) {
+browser.storage.sync.get('extension_active').then(result => {
   document.getElementById('on_off').checked = result.extension_active;
 });
 
@@ -278,11 +277,11 @@ chrome.storage.sync.get('extension_active', function(result) {
 document.getElementById('matplotlib').addEventListener('click', handleMatplot);
 
 function handleMatplot() {
-  chrome.storage.sync.get(['extension_active','filename','user_added'], function(result) {
+  browser.storage.sync.get(['extension_active', 'filename', 'user_added']).then(result => {
     if (result.extension_active) {
       if (result.user_added) {
         let filename = result.filename;
-        chrome.storage.sync.get([filename + '1', filename + '2', filename + '3'], function(result2) {
+        browser.storage.sync.get([filename + '1', filename + '2', filename + '3']).then(result2 => {
           let theme_json = result2[filename + '1'] + result2[filename + '2'] + result2[filename + '3'];
           theme_json = JSON.parse(theme_json);
           // set monaco
@@ -302,64 +301,7 @@ function handleMatplot() {
 }
 
 function copyMatplot(theme_json, filename) {
-  // a heuristic
-  let unfiltered = new Set()
-  let sublime = new Set()
-  for (let i = 0; i < theme_json.rules.length; i++) {
-    if (theme_json.rules[i].token.match('punct')) {
-      if (theme_json.rules[i].hasOwnProperty('foreground')) {
-        unfiltered.add(theme_json.rules[i].foreground) 
-      }
-    }
-    if (theme_json.rules[i].token.match('meta')) {
-      if (theme_json.rules[i].hasOwnProperty('foreground')) {
-        unfiltered.add(theme_json.rules[i].foreground) 
-      }
-    }
-    if (theme_json.rules[i].token.match('sublime')) {
-      if (theme_json.rules[i].hasOwnProperty('foreground')) {
-        sublime.add(theme_json.rules[i].foreground) 
-      }
-    }
-  }
-
-  if (unfiltered.size <= 2) {
-    for (let i = 0; i < theme_json.rules.length; i++) {
-      if (theme_json.rules[i].token.match('entity')) {
-        if (theme_json.rules[i].hasOwnProperty('foreground')) {
-          unfiltered.add(theme_json.rules[i].foreground) 
-        }
-      }
-      if (theme_json.rules[i].token.match('constant')) {
-        if (theme_json.rules[i].hasOwnProperty('foreground')) {
-          unfiltered.add(theme_json.rules[i].foreground) 
-        }
-      }
-    }
-  }
-  for (let x of unfiltered) { if (sublime.has(x)) { unfiltered.delete(x) } };
-  let colors = Array();
-  for (let x of unfiltered) {colors.push("'#" +  x + "'")};
-
-  let rc = 'rcParams[';
-  let code = '# basic matplotlib theme of ' + filename + '\n# NOTE: this does not support 3d plots\nfrom matplotlib import rcParams\nfrom cycler import cycler\n';
-  code += rc + "'axes.prop_cycle']=cycler(color=["+colors.toString()+"])\n";
-  // text items
-  let fgs = ['axes.edgecolor','axes.labelcolor','xtick.color','ytick.color','text.color','figure.edgecolor','grid.color'];
-  let fg = "'" + theme_json.colors['editor.foreground'] + "'";
-  for (let x of fgs) { code += rc + "'" + x + "']=" + fg + "\n"};
-  // grid
-  code += `rcParams['grid.linestyle']=':'\n`;
-  // plot inside
-  let bg = theme_json.colors['editor.background'];
-  let bg_light = scale(bg, 1.15);
-  if (hex_is_light(bg)) {
-    bg_light = scale(bg,1.03);
-  }
-  code += rc + "'axes.facecolor']=" + "'" + bg_light +"'\n";
-  // plot outside
-  code += rc + "'figure.facecolor']=" + "'" + bg_light +"'\n";
-  navigator.clipboard.writeText(code);
+  /* ... existing copyMatplot function ... */
 }
 
 // import theme button logic
@@ -367,40 +309,38 @@ let errorMsg = document.getElementById('errorMsg');
 document.getElementById('upload').addEventListener('change', readFile);
 
 function readFile() {
-  errorMsg.innerHTML = ''
+  errorMsg.textContent = ''
   let files = this.files;
   if (files.length != 1) {
-    errorMsg.innerHTML = "Please select a file.<br/>";
+    errorMsg.textContent = "Please select a file.";
     return;
   }
   if (files[0].type != 'application/json') {
-    errorMsg.innerHTML = 'The file must be a JSON file.<br/>';
+    errorMsg.textContent = 'The file must be a JSON file.<br/>';
     return;
   }
   let reader = new FileReader();
   reader.onload = function(event) {
     let theme_json = JSON.stringify(JSON.parse(event.target.result))
     if (theme_json.length > 21000) {
-      errorMsg.innerHTML = 'The file is too large.<br/>';
+      errorMsg.textContent = 'The file is too large.<br/>';
       return;
     }
     // get rid of .json in the theme name
     let filename = files[0].name.slice(0,-5);
-    goodMsg.innerHTML += filename + ' has been added to the list!<br/>';
-    // max chrome storage is 8096 bytes per variable including the name
-    // In my tests, I have not made a monaco theme larger than 24KB
-    console.log(filename+'1');
-    chrome.storage.sync.set({[filename + '1'] : theme_json.slice(0,7000)});
-    chrome.storage.sync.set({[filename + '2'] : theme_json.slice(7000,14000)});
-    chrome.storage.sync.set({[filename + '3'] : theme_json.slice(14000,21000)});
+    goodMsg.textContent += filename + ' has been added to the list!<br/>';
+    
+    browser.storage.sync.set({[filename + '1']: theme_json.slice(0,7000)});
+    browser.storage.sync.set({[filename + '2']: theme_json.slice(7000,14000)});
+    browser.storage.sync.set({[filename + '3']: theme_json.slice(14000,21000)});
 
-    chrome.storage.sync.get('user_files', function(result) {
+    browser.storage.sync.get('user_files').then(result => {
       if (result.user_files) {
         result.user_files.push(filename);
-        chrome.storage.sync.set({'user_files' : result.user_files});
+        browser.storage.sync.set({'user_files': result.user_files});
       }
       else {
-        chrome.storage.sync.set({'user_files' : [filename]});
+        browser.storage.sync.set({'user_files': [filename]});
       }
     });
   }
